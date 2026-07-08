@@ -11,3 +11,103 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ─────────────────────────────────────────────
+// Le besoin brut du client, point d'entrée du process
+// ─────────────────────────────────────────────
+model Brief {
+  id        String   @id @default(cuid())
+  content   String   // texte brut du brief (email, note, message...)
+  source    String   // "email" | "slack" | "note" | "manual"
+  status    String   @default("draft") // draft | clarifying | ready | tickets_created
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clarifications Clarification[]
+  backlogItems   BacklogItem[]
+  generatedDocs  GeneratedDoc[]
+
+  @@map("briefs")
+}
+
+// ─────────────────────────────────────────────
+// Questions posées par l'agent + réponses du client
+// Preuve que l'agent clarifie plutôt que de deviner
+// ─────────────────────────────────────────────
+model Clarification {
+  id         String    @id @default(cuid())
+  brief      Brief     @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  briefId    String
+  question   String
+  answer     String?
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("clarifications")
+}
+
+// ─────────────────────────────────────────────
+// Découpage technique + estimation produits par l'agent
+// L'humain valide avant toute action (création de ticket)
+// ─────────────────────────────────────────────
+model BacklogItem {
+  id             String   @id @default(cuid())
+  brief          Brief    @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  briefId        String
+  title          String
+  description    String
+  effortEstimate String   // "S" | "M" | "L" ou nombre de jours en texte
+  status         String   @default("proposed") // proposed | validated | rejected
+  createdAt      DateTime @default(now())
+
+  generatedPrompts GeneratedPrompt[]
+  githubIssue      GithubIssue?
+
+  @@map("backlog_items")
+}
+
+// ─────────────────────────────────────────────
+// Fichiers markdown générés (AGENT.md, ARCHITECTURE.md, etc.)
+// Résultat stocké pour être consulté/téléchargé, pas source de vérité
+// ─────────────────────────────────────────────
+model GeneratedDoc {
+  id        String   @id @default(cuid())
+  brief     Brief    @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  briefId   String
+  docType   String   // "agent" | "architecture" | "changelog" | "task" | "skill"
+  content   String   // contenu markdown généré
+  createdAt DateTime @default(now())
+
+  @@map("generated_docs")
+}
+
+// ─────────────────────────────────────────────
+// Prompts prêts-à-taper, liés à une tâche du backlog
+// Affichés dans l'UI : clic sur une tâche → prompt à copier dans Claude Code
+// ─────────────────────────────────────────────
+model GeneratedPrompt {
+  id            String      @id @default(cuid())
+  backlogItem   BacklogItem @relation(fields: [backlogItemId], references: [id], onDelete: Cascade)
+  backlogItemId String
+  stepLabel     String      // ex: "setup docker", "impl auth"
+  promptText    String
+  createdAt     DateTime    @default(now())
+
+  @@map("generated_prompts")
+}
+
+// ─────────────────────────────────────────────
+// Lien entre le backlog et le vrai ticket créé sur GitHub
+// Évite les doublons + permet d'afficher un lien cliquable
+// ─────────────────────────────────────────────
+model GithubIssue {
+  id                String      @id @default(cuid())
+  backlogItem       BacklogItem @relation(fields: [backlogItemId], references: [id], onDelete: Cascade)
+  backlogItemId     String      @unique
+  githubIssueNumber Int
+  githubUrl         String
+  createdAt         DateTime    @default(now())
+
+  @@map("github_issues")
+}
+
