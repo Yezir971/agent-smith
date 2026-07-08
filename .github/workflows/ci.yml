@@ -1,0 +1,59 @@
+name: CI Verification
+
+on:
+  pull_request:
+    branches: [ main, develop ] # Déclenche la CI sur les PR vers ces branches
+
+jobs:
+  verify-application:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Récupération du code source
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Configuration de Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ./agent-smith/package-lock.json 
+
+      # 3. Installation des dépendances
+      - name: Install dependencies
+        run: |
+          cd agent-smith
+          npm ci
+
+      # 4. Démarrage de la BDD PostgreSQL via docker-compose
+      - name: Start Database
+        run: docker compose up -d db
+
+      # 5. Lancement de Prisma (génération du client et push du schéma)
+      - name: Setup Prisma
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:51214/briefmaster?schema=public"
+        run: |
+          cd agent-smith
+          npx prisma generate
+          npx prisma db push
+
+      # 6. Lancement et vérification de npm run dev
+      - name: Verify Next.js Dev Server
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:51214/briefmaster?schema=public"
+          ANTHROPIC_API_KEY: "fake_key_for_ci" 
+          LLM_PROVIDER: "anthropic"
+        run: |
+          cd agent-smith
+          
+          # Lance le serveur de dev en arrière-plan (&)
+          npm run dev &
+          
+          # Attend que le port 3000 réponde (Timeout de 40 secondes)
+          echo "Attente du démarrage de Next.js sur le port 3000..."
+          timeout 40s bash -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; echo "En attente..."; done'
+          
+          echo "✅ Next.js s'est lancé avec succès et répond sur le port 3000 !"
