@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "docker:down:build": "docker compose down | docker compose up --build -d",
+    "docker:build": "docker compose up --build -d",
+    "docker:health": "npm run docker:build || agy -i \"Le build Docker a échoué. Examine l'erreur, modifie la configuration pour la corriger, et relance le build.\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
