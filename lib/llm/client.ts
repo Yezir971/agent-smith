@@ -38,7 +38,7 @@ export async function callLLM(
 
   if (provider === 'anthropic') {
     const params: Anthropic.MessageCreateParams = {
-      model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
       max_tokens: 4000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
@@ -67,7 +67,7 @@ export async function callLLM(
 
     return { text, toolCalls };
   } else if (provider === 'ollama') {
-    const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    const ollamaUrl = process.env.OLLAMA_BASE_URL || process.env.OLLAMA_URL || 'http://localhost:11434';
     const ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5:latest';
 
     const messages = [
