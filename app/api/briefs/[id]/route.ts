@@ -19,7 +19,7 @@ if (globalForPrisma.prisma) {
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
-export async function POST(
+export async function GET(
   request: Request,
   context: any
 ) {
@@ -33,36 +33,29 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    // 1. Recherche du backlog item
-    const backlogItem = await prisma.backlogItem.findUnique({
+    const brief = await prisma.brief.findUnique({
       where: { id },
+      include: {
+        clarifications: true,
+        backlogItems: {
+          include: {
+            githubIssue: true,
+          },
+        },
+        generatedDocs: true,
+      },
     });
 
-    // 2. Validation de l'existence et du statut actuel
-    if (!backlogItem) {
+    if (!brief) {
       return NextResponse.json(
-        { error: `Backlog item avec l'ID ${id} non trouvé.` },
-        { status: 400 }
+        { error: `Brief avec l'ID ${id} non trouvé.` },
+        { status: 404 }
       );
     }
 
-    if (backlogItem.status === 'validated') {
-      return NextResponse.json(
-        { error: 'Ce backlog item est déjà validé.' },
-        { status: 400 }
-      );
-    }
-
-    // 3. Mise à jour du statut vers "validated"
-    const updatedBacklogItem = await prisma.backlogItem.update({
-      where: { id },
-      data: { status: 'validated' },
-    });
-
-    return NextResponse.json(updatedBacklogItem);
+    return NextResponse.json(brief);
   } catch (error: any) {
-    console.error('API Error in validate route:', error);
+    console.error('API Error in GET brief by ID:', error);
     return NextResponse.json(
       { error: `Internal Server Error: ${error.message || error}` },
       { status: 500 }

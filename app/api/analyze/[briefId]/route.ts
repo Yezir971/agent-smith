@@ -36,10 +36,18 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ briefId: string }> }
+  context: any
 ) {
   try {
-    const { briefId } = await context.params;
+    const params = await context?.params;
+    const briefId = params?.briefId || params?.briefid;
+
+    if (!briefId) {
+      return NextResponse.json(
+        { error: 'briefId est requis et doit être présent dans la route.' },
+        { status: 400 }
+      );
+    }
 
     // 1. Récupération du brief existant
     const brief = await prisma.brief.findUnique({
