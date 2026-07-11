@@ -32,7 +32,8 @@ function getAnthropicClient(): Anthropic {
 export async function callLLM(
   systemPrompt: string,
   userMessage: string,
-  tools: Anthropic.Tool[]
+  tools: Anthropic.Tool[],
+  toolChoice?: any
 ): Promise<LLMResponse> {
   const provider = (process.env.LLM_PROVIDER || 'anthropic').toLowerCase();
 
@@ -46,6 +47,9 @@ export async function callLLM(
 
     if (tools && tools.length > 0) {
       params.tools = tools;
+      if (toolChoice) {
+        params.tool_choice = toolChoice;
+      }
     }
 
     const response = await getAnthropicClient().messages.create(params);

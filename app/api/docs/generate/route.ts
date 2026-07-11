@@ -25,12 +25,20 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { briefId } = body;
+    const { briefId, docType } = body;
 
-    // 1. Validation de l'entrée briefId
+    // 1. Validation de l'entrée briefId et docType
     if (!briefId || typeof briefId !== 'string') {
       return NextResponse.json(
         { error: 'briefId est requis et doit être une chaîne de caractères.' },
+        { status: 400 }
+      );
+    }
+
+    const validDocTypes = ['agent', 'architecture', 'changelog', 'task'];
+    if (!docType || typeof docType !== 'string' || !validDocTypes.includes(docType)) {
+      return NextResponse.json(
+        { error: `docType est requis et doit être l'un des suivants : ${validDocTypes.join(', ')}.` },
         { status: 400 }
       );
     }
@@ -82,43 +90,51 @@ export async function POST(request: Request) {
       .map((c) => `Question: ${c.question}\nRéponse: ${c.answer}`)
       .join('\n\n');
 
-    // 5. Construction du prompt système et du message utilisateur demandant la génération de tous les documents
+    // 5. Construction du prompt système et du message utilisateur demandant UNIQUEMENT le document sélectionné
     const systemPrompt = buildSystemPrompt(brief.content, clarificationsContext);
+
+    const docTypeLabels: Record<string, string> = {
+      agent: 'AGENT.md (doc_type: "agent") - Le fichier décrivant la personnalité, les compétences et les instructions de l\'agent.',
+      architecture: 'ARCHITECTURE.md (doc_type: "architecture") - Le fichier décrivant les choix techniques et l\'architecture globale du projet.',
+      changelog: 'CHANGELOG.md (doc_type: "changelog") - Le fichier de journalisation des modifications.',
+      task: 'TASK.md (doc_type: "task") - Le fichier contenant le backlog et le plan d\'action technique.',
+    };
 
     const userMessage = `Voici le brief original :
 ${brief.content}
 
 Le backlog a été entièrement validé et le périmètre du projet est clair.
-Tu dois générer les quatre documents de référence du projet :
-1. AGENT.md (doc_type: 'agent')
-2. ARCHITECTURE.md (doc_type: 'architecture')
-3. CHANGELOG.md (doc_type: 'changelog')
-4. TASK.md (doc_type: 'task')
+Tu dois générer UNIQUEMENT le document suivant pour ce projet :
+${docTypeLabels[docType]}
 
-Veuillez appeler l'outil generate_docs pour CHACUN de ces quatre documents de manière spécifique, complète, sans aucun placeholder ni contenu générique (comme "à compléter").`;
+Veuillez appeler l'outil generate_docs pour produire le contenu de ce document de manière spécifique, complète, sans aucun placeholder ni contenu générique (comme "à compléter").`;
 
-    // 6. Appel au LLM
+    // 6. Appel au LLM en forçant l'outil generate_docs
     let llmResponse;
     try {
-      llmResponse = await callLLM(systemPrompt, userMessage, tools);
+      llmResponse = await callLLM(systemPrompt, userMessage, tools, {
+        type: 'tool',
+        name: 'generate_docs',
+      });
     } catch (llmError: any) {
-      console.error('LLM Call failed during doc generation:', llmError);
+      console.error(`LLM Call failed during generation of ${docType}:`, llmError);
       return NextResponse.json(
         { error: `LLM Call failed: ${llmError.message || llmError}` },
-        { status: 500 }
+        { status: 550 }
       );
     }
 
-    // 7. Persistance des documents générés
-    const generatedDocsCreated = [];
+    // 7. Persistance du document généré
+    let createdDoc = null;
 
     if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
       for (const tc of llmResponse.toolCalls) {
         if (tc.name === 'generate_docs') {
-          const docType = tc.input.doc_type;
+          const returnedDocType = tc.input.doc_type;
           const content = tc.input.content;
 
-          if (!docType || !content) {
+          // On s'assure qu'on persiste le type demandé
+          if (!returnedDocType || !content || returnedDocType !== docType) {
             continue;
           }
 
@@ -126,34 +142,34 @@ Veuillez appeler l'outil generate_docs pour CHACUN de ces quatre documents de ma
           await prisma.generatedDoc.deleteMany({
             where: {
               briefId,
-              docType,
+              docType: returnedDocType,
             },
           });
 
           // Création du document généré
-          const created = await prisma.generatedDoc.create({
+          createdDoc = await prisma.generatedDoc.create({
             data: {
               briefId,
-              docType,
+              docType: returnedDocType,
               content,
             },
           });
-          generatedDocsCreated.push(created);
+          break; // On a trouvé notre document, on s'arrête
         }
       }
     }
 
-    if (generatedDocsCreated.length === 0) {
+    if (!createdDoc) {
       return NextResponse.json(
-        { error: "Le LLM n'a retourné aucun appel à l'outil generate_docs pour générer les documents." },
+        { error: `Le LLM n'a pas retourné l'appel à l'outil generate_docs pour générer le document ${docType}.` },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: `${generatedDocsCreated.length} documents ont été générés et enregistrés avec succès.`,
-      docs: generatedDocsCreated,
+      message: `Le document ${docType.toUpperCase()}.md a été généré et enregistré avec succès.`,
+      doc: createdDoc,
     });
   } catch (error: any) {
     console.error('API Error in doc generation route:', error);

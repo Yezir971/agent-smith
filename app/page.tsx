@@ -27,6 +27,7 @@ export default function Home() {
   // États pour la génération de documents
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [genStatus, setGenStatus] = useState<string | null>(null);
 
   // Charger la liste des briefs
   const fetchBriefs = async () => {
@@ -75,19 +76,30 @@ export default function Home() {
     setGenLoading(true);
     setGenError(null);
 
+    const docTypes = ['agent', 'architecture', 'changelog', 'task'];
+    const docLabels: Record<string, string> = {
+      agent: 'AGENT.md',
+      architecture: 'ARCHITECTURE.md',
+      changelog: 'CHANGELOG.md',
+      task: 'TASK.md',
+    };
+
     try {
-      const res = await fetch('/api/docs/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ briefId: activeBrief.id }),
-      });
+      for (const docType of docTypes) {
+        setGenStatus(`Rédaction de ${docLabels[docType]}...`);
+        const res = await fetch('/api/docs/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ briefId: activeBrief.id, docType }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Erreur lors de la génération des documents.');
+        if (!res.ok) {
+          throw new Error(data.error || `Erreur lors de la génération de ${docLabels[docType]}`);
+        }
       }
 
       await refreshActiveBrief(activeBrief.id);
@@ -96,6 +108,7 @@ export default function Home() {
       setGenError(err.message || 'Erreur lors de la génération.');
     } finally {
       setGenLoading(false);
+      setGenStatus(null);
     }
   };
 
@@ -322,7 +335,7 @@ export default function Home() {
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                             </svg>
-                            Génération en cours...
+                            {genStatus || 'Génération...'}
                           </>
                         ) : !isBacklogFullyValidated ? (
                           'Validez tout le backlog pour générer'
@@ -340,12 +353,16 @@ export default function Home() {
               )}
 
               {/* SECTION 4 : VISUALISATION DES DOCUMENTS PROJET GÉNÉRÉS */}
-              {activeBrief.generatedDocs.length > 0 && (
+              {activeBrief.backlogItems.length > 0 && (
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Documents Projet Générés
+                    Documents Projet
                   </h3>
-                  <GeneratedDocsView docs={activeBrief.generatedDocs} />
+                  <GeneratedDocsView
+                    briefId={activeBrief.id}
+                    docs={activeBrief.generatedDocs}
+                    onDocGenerated={() => refreshActiveBrief(activeBrief.id)}
+                  />
                 </div>
               )}
             </div>
