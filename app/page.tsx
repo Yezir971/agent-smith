@@ -165,7 +165,7 @@ export default function Home() {
         <div className="p-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <div>
             <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              🕵️‍♂️ Agent Smith
+              Agent Smith
             </h1>
             <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
               Cadrage automatique de briefs
