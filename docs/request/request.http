@@ -1,0 +1,98 @@
+### requests.http
+### Fichier de test manuel des routes API — compatible extension VS Code "REST Client" ou IntelliJ HTTP Client
+### Usage : cliquer sur "Send Request" au-dessus de chaque bloc, dans l'ordre.
+### Remplace {{briefId}}, {{backlogItemId}} par les vrais ids retournés au fil des réponses.
+
+@baseUrl = http://localhost:3000
+
+### ────────────────────────────────────────────
+### 1. Analyse initiale — brief volontairement vague
+### Attendu : réponse avec des clarifications (ask_clarification)
+### ────────────────────────────────────────────
+POST {{baseUrl}}/api/analyze
+Content-Type: application/json
+
+{
+  "briefContent": "On veut une app pour gérer nos stocks.",
+  "source": "email"
+}
+
+### ────────────────────────────────────────────
+### 1bis. Analyse initiale — brief précis
+### Attendu : réponse avec backlog + estimations (propose_backlog / estimate_effort)
+### ────────────────────────────────────────────
+POST {{baseUrl}}/api/analyze
+Content-Type: application/json
+
+{
+  "briefContent": "Développer une page web statique de contact avec un formulaire (nom, email, message) qui envoie un email via SendGrid. Pas de base de données nécessaire, stack Next.js déjà décidée, deadline dans 2 semaines.",
+  "source": "email"
+}
+
+### ────────────────────────────────────────────
+### 2. Relance après réponses aux clarifications
+### Remplace {{briefId}} et {{clarificationId}} par les vrais ids reçus en (1)
+### ────────────────────────────────────────────
+@briefId = cmrdtzjwr000001l7c5nhforj
+@clarificationId = cmrduxo1u000201lhku7v88l8
+
+POST {{baseUrl}}/api/analyze/{{briefId}}
+Content-Type: application/json
+
+{
+  "answers": [
+    {
+      "clarificationId": "{{clarificationId}}",
+      "answer": "On veut suivre les niveaux de stock en temps réel et être notifié quand un produit passe sous un seuil défini. Pas d'intégration POS pour le moment."
+    }
+  ]
+}
+
+### ────────────────────────────────────────────
+### 3. Validation d'un backlog item
+### Remplace {{backlogItemId}} par un id reçu après un backlog proposé
+### ────────────────────────────────────────────
+@backlogItemId = REMPLACE_MOI
+
+POST {{baseUrl}}/api/backlog/{{backlogItemId}}/validate
+Content-Type: application/json
+
+### ────────────────────────────────────────────
+### 3bis. Cas d'erreur attendu : valider un item déjà validated
+### Doit retourner une 400 propre, pas un crash
+### ────────────────────────────────────────────
+POST {{baseUrl}}/api/backlog/{{backlogItemId}}/validate
+Content-Type: application/json
+
+### ────────────────────────────────────────────
+### 4. Génération des documents projet
+### Nécessite un backlog entièrement validated pour ce brief
+### ────────────────────────────────────────────
+POST {{baseUrl}}/api/docs/generate
+Content-Type: application/json
+
+{
+  "briefId": "{{briefId}}"
+}
+
+### ────────────────────────────────────────────
+### 5. Création d'une issue GitHub réelle
+### Nécessite GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO configurés dans .env
+### ────────────────────────────────────────────
+POST {{baseUrl}}/api/github/issues
+Content-Type: application/json
+
+{
+  "backlogItemId": "{{backlogItemId}}"
+}
+
+### ────────────────────────────────────────────
+### 5bis. Cas d'erreur attendu : recréer une issue déjà liée
+### Doit retourner une erreur propre (contrainte @unique), pas de doublon créé
+### ────────────────────────────────────────────
+POST {{baseUrl}}/api/github/issues
+Content-Type: application/json
+
+{
+  "backlogItemId": "{{backlogItemId}}"
+}
