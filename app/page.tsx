@@ -176,7 +176,7 @@ export default function Home() {
               setActiveBrief(null);
               setIsCreating(true);
             }}
-            className="p-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 rounded-lg text-xs font-semibold shadow-xs"
+            className="w-[25px] h-[25px] flex justify-center items-center cursor-pointer bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 rounded-lg text-l font-semibold shadow-xs"
             title="Nouveau brief"
           >
             ＋
